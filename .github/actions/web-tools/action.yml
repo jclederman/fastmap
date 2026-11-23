@@ -1,0 +1,27 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+name: Web build tools
+description: Rust with the wasm32 target, wasm-bindgen-cli matching Cargo.lock, and binaryen's wasm-opt
+runs:
+  using: composite
+  steps:
+    - uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: wasm32-unknown-unknown
+        components: clippy
+    - uses: Swatinem/rust-cache@v2
+    - name: Install wasm-bindgen-cli (version from Cargo.lock)
+      shell: bash
+      run: |
+        v=$(grep -A1 '^name = "wasm-bindgen"$' Cargo.lock | sed -n 's/^version = "\(.*\)"/\1/p')
+        echo "wasm-bindgen $v"
+        curl -sSfL "https://github.com/rustwasm/wasm-bindgen/releases/download/$v/wasm-bindgen-$v-x86_64-unknown-linux-musl.tar.gz" \
+          | tar xz -C "$RUNNER_TEMP"
+        echo "$RUNNER_TEMP/wasm-bindgen-$v-x86_64-unknown-linux-musl" >> "$GITHUB_PATH"
+    - name: Install wasm-opt (latest binaryen)
+      shell: bash
+      run: |
+        tag=$(curl -sSf https://api.github.com/repos/WebAssembly/binaryen/releases/latest | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p')
+        echo "binaryen $tag"
+        curl -sSfL "https://github.com/WebAssembly/binaryen/releases/download/$tag/binaryen-$tag-x86_64-linux.tar.gz" \
+          | tar xz -C "$RUNNER_TEMP"
+        echo "WASM_OPT=$RUNNER_TEMP/binaryen-$tag/bin/wasm-opt" >> "$GITHUB_ENV"

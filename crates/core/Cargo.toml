@@ -1,0 +1,18 @@
+[package]
+name = "fastmap-core"
+description = "Seamless, infinite fractal terrain on a hex lattice via FFT convolution"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+rustfft.workspace = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+rustfft = { workspace = true, features = ["avx", "sse", "neon"] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+rustfft = { workspace = true, features = ["wasm_simd"] }

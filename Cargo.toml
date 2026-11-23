@@ -1,0 +1,34 @@
+[workspace]
+resolver = "3"
+members = ["crates/core", "crates/render", "crates/web", "crates/viewer", "xtask"]
+default-members = ["crates/core", "crates/render", "crates/viewer"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+authors = ["Joshua C. Lederman"]
+repository = "https://github.com/jclederman/fastmap"
+rust-version = "1.88"
+
+[workspace.dependencies]
+fastmap-core = { path = "crates/core" }
+fastmap-render = { path = "crates/render" }
+rustfft = { version = "6.4", default-features = false }
+wgpu = { version = "30", default-features = false }
+bytemuck = { version = "1.25", features = ["derive"] }
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = "debuginfo"
+
+
+# Size-optimize glue (wgpu, web-sys, UI); keep the hot numeric code at full speed.
+[profile.release.package."*"]
+opt-level = "s"
+[profile.release.package.fastmap-core]
+opt-level = 3
+[profile.release.package.rustfft]
+opt-level = 3

@@ -1,0 +1,166 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FastMap: infinite hex terrain</title>
+<meta name="description" content="Seamless, unbounded fractal terrain on a hex grid, generated tile by tile with FFT convolution in Rust/WebAssembly and drawn with WebGPU.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 2 28 9v14L16 30 4 23V9z' fill='%23497f46'/%3E%3Cpath d='M16 9 22 13v7l-6 3-6-3v-7z' fill='%2396918a'/%3E%3C/svg%3E">
+<style>
+:root {
+  color-scheme: dark;
+  --bg: #131619; --panel: #1b1f24ee; --line: #2c333b; --text: #dde3ea; --dim: #8c97a3;
+  --accent: #6fb36a; --accent2: #4f8fc9;
+  font: 14px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); }
+body { display: flex; flex-direction: column; overflow: hidden; }
+a { color: var(--accent2); text-decoration: none; }
+a:hover { text-decoration: underline; }
+header { display: flex; align-items: baseline; gap: 12px; padding: 8px 16px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+header h1 { font-size: 18px; margin: 0; letter-spacing: .3px; }
+header h1 span { color: var(--accent); }
+header nav { display: flex; gap: 14px; margin-left: auto; }
+main { position: relative; flex: 1; min-height: 0; }
+#map { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; background: #131619; }
+#map:active { cursor: grabbing; }
+#status { position: absolute; inset: 0; display: grid; place-items: center; color: var(--dim); pointer-events: none; font-size: 15px; }
+body.ready #status { display: none; }
+#copyright { position: absolute; left: 12px; bottom: 10px; color: var(--dim); font-size: 12px; pointer-events: none; text-shadow: 0 1px 2px #000; }
+#panel { position: absolute; top: 12px; right: 12px; width: 340px; max-height: calc(100% - 24px); overflow: auto;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px; backdrop-filter: blur(6px); }
+#panel > summary { padding: 10px 14px; cursor: pointer; font-weight: 600; list-style: none; display: flex; justify-content: space-between; }
+#panel > summary::after { content: "▾"; color: var(--dim); }
+#panel:not([open]) > summary::after { content: "▸"; }
+#panel section { padding: 6px 14px 10px; border-top: 1px solid var(--line); }
+#panel h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .8px; color: var(--dim); margin: 6px 0 6px; font-weight: 600; }
+.row { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+.row label { flex: 1; }
+.row output { width: 46px; text-align: right; font-variant-numeric: tabular-nums; color: var(--dim); }
+input[type=range] { width: 100%; accent-color: var(--accent); }
+input[type=number], select { background: #0f1215; color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; font: inherit; }
+input[type=number] { width: 100%; }
+#bw, #bh { width: 56px; }
+button { background: #263039; color: var(--text); border: 1px solid #36424e; border-radius: 6px; padding: 6px 10px; font: inherit; cursor: pointer; }
+button:hover { background: #2f3b46; }
+button.primary { background: #2f5d2d; border-color: #437f40; }
+button.primary:hover { background: #386e35; }
+.buttons { display: flex; gap: 8px; flex-wrap: wrap; }
+.checks { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; }
+.checks label { display: flex; gap: 6px; align-items: center; }
+dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 2px 10px; margin: 0; font-size: 12.5px; }
+dt { color: var(--dim); white-space: nowrap; }
+#panel h3 { font-size: 12px; font-weight: 600; margin: 10px 0 3px; }
+dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+.slider { margin: 4px 0 8px; }
+.slider .top { display: flex; justify-content: space-between; }
+.slider .top span { color: var(--dim); font-variant-numeric: tabular-nums; }
+@media (max-width: 640px) {
+  #panel { top: auto; bottom: 8px; right: 8px; left: 8px; width: auto; max-height: 55%; }
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>Fast<span>Map</span></h1>
+  <nav>
+    <a href="https://github.com/jclederman/fastmap/blob/main/docs/method.md">How it works</a>
+    <a href="https://github.com/jclederman/fastmap">Source</a>
+  </nav>
+</header>
+<main>
+  <canvas id="map" aria-label="Terrain map. Drag to pan, scroll or pinch to zoom."></canvas>
+  <div id="status">Loading…</div>
+  <div id="copyright">© 2026 Joshua C. Lederman</div>
+  <details id="panel" open>
+    <summary>Settings</summary>
+    <section>
+      <h2>Map</h2>
+      <div class="row"><label for="seed">Seed</label><input id="seed" type="number" min="0" step="1" style="width:130px"></div>
+      <div class="buttons"><button id="regenerate" class="primary" title="Pick a new random seed">Regenerate</button><button id="save">Save PNG</button></div>
+    </section>
+    <section>
+      <h2>Terrain</h2>
+      <div class="slider"><div class="top"><label for="beta" title="Spectral exponent β: amplitude ∝ |k|^−β. Higher is smoother.">Smoothness β</label><span id="beta-val"></span></div>
+        <input id="beta" type="range" min="0.5" max="3" step="0.05"></div>
+      <div class="slider"><div class="top"><label for="radius" title="Largest feature size in hexes (logarithmic slider).">Feature size R</label><span id="radius-val"></span></div>
+        <input id="radius" type="range" min="0.6" max="3.4" step="0.005"></div>
+      <div class="slider"><div class="top"><label for="land" title="Sea level is set analytically from the Gaussian quantile.">Land</label><span id="land-val"></span></div>
+        <input id="land" type="range" min="0" max="100" step="1"></div>
+    </section>
+    <section>
+      <h2>Extent</h2>
+      <div class="checks">
+        <label><input type="radio" name="mode" id="mode-unbounded"> Unbounded</label>
+        <label><input type="radio" name="mode" id="mode-bounded"> Bounded</label>
+      </div>
+      <div class="row" id="bounded-dims"><label>Tiles (128² hexes each)</label><input id="bw" type="number" min="1" max="16"> × <input id="bh" type="number" min="1" max="16"></div>
+    </section>
+    <section>
+      <h2>Display</h2>
+      <div class="row"><label for="color">Color</label><select id="color"><option value="terrain">Terrain</option><option value="atlas">Atlas</option><option value="parchment">Parchment</option><option value="gray">Grayscale</option><option value="viridis">Viridis</option></select></div>
+      <div class="checks">
+        <label><input type="checkbox" id="shade"> Hillshade</label>
+        <label><input type="checkbox" id="outlines"> Hex outlines</label>
+        <label><input type="checkbox" id="tiles"> Tile edges</label>
+      </div>
+      <div class="slider"><div class="top"><label for="relief">Relief</label><span id="relief-val"></span></div>
+        <input id="relief" type="range" min="0" max="20" step="0.5"></div>
+    </section>
+    <section>
+      <h2>Performance</h2>
+      <h3>Terrain generation</h3>
+      <dl>
+        <dt title="Average time to compute one tile from scratch: random noise, FFT convolution, and upload to the GPU.">Time per new tile</dt><dd id="st-tile">–</dd>
+        <dt title="Average time to recompute a tile after moving the Smoothness or Feature size slider. Its random noise is kept, so only the convolution is redone. Land, display and relief changes need no recomputation.">Per tile after β / R change</dt><dd id="st-cached">–</dd>
+        <dt title="Compute time for all the tiles generated the last time the view had to be filled in (after a pan, zoom or setting change). The work is spread over several frames so the page stays responsive.">Last view fill</dt><dd id="st-map">–</dd>
+        <dt title="Tiles the current view still needs. They are computed a few per frame.">Tiles still to compute</dt><dd id="st-pending">–</dd>
+      </dl>
+      <h3>Drawing</h3>
+      <dl>
+        <dt title="Graphics API used to draw the map.">Graphics</dt><dd id="st-backend">–</dd>
+        <dt title="Frames drawn per second. The browser caps this at the display's refresh rate.">Frame rate</dt><dd id="st-frame">–</dd>
+        <dt title="Tiles visible in the current view.">Tiles on screen</dt><dd id="st-drawn">–</dd>
+        <dt title="Tiles kept in GPU memory, so panning back to them is instant.">Tiles stored on GPU</dt><dd id="st-resident">–</dd>
+      </dl>
+      <h3>Page load</h3>
+      <dl>
+        <dt title="Time from opening the page until the first full view of terrain was on screen, including the download.">First map shown</dt><dd id="st-load">–</dd>
+        <dt title="Size of the WebAssembly program as downloaded (compressed), and its uncompressed size.">Download size</dt><dd id="st-size">–</dd>
+      </dl>
+    </section>
+  </details>
+</main>
+<noscript><p style="position:fixed;inset:auto 0 50% 0;text-align:center">FastMap needs JavaScript enabled to load its WebAssembly module.</p></noscript>
+<script type="module">
+// The only hand-written JavaScript: load the WebGPU build if the browser has a usable GPU
+// adapter, otherwise the (larger) WebGL2 build. Everything else is Rust.
+// Desktop Linux defaults to WebGL2: Chrome's WebGPU there is still experimental and its
+// frames arrive hundreds of ms late. ?backend=webgpu or ?backend=webgl overrides.
+const BUILD = "__BUILD__", status = document.getElementById("status");
+const force = new URLSearchParams(location.search).get("backend");
+const linux = /Linux/.test(navigator.userAgent) && !/Android|CrOS/.test(navigator.userAgent);
+async function webgpu() {
+  if (force === "webgl" || !navigator.gpu || (linux && force !== "webgpu")) return false;
+  try { return !!(await navigator.gpu.requestAdapter()); } catch { return false; }
+}
+async function boot(kind) {
+  const m = await import(`./fastmap_${kind}.js?v=${BUILD}`);
+  await m.default({ module_or_path: `./fastmap_${kind}_bg.wasm?v=${BUILD}` });
+  await m.start();
+}
+if (location.protocol === "file:" || BUILD.startsWith("__"))
+  status.textContent = "This is the page source. Build and serve it with: cargo xtask web --serve";
+else try {
+  if (await webgpu()) {
+    try { await boot("webgpu"); }
+    catch (e) { console.warn("WebGPU start failed, falling back to WebGL2:", e);
+      const c = document.getElementById("map"); c.replaceWith(c.cloneNode()); await boot("webgl"); }
+  } else await boot("webgl");
+} catch (e) { status.textContent = "FastMap could not start: " + e; console.error(e); }
+</script>
+</body>
+</html>

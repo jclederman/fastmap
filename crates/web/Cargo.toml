@@ -1,0 +1,30 @@
+[package]
+name = "fastmap-web"
+description = "FastMap browser demo (wasm + wgpu)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[features]
+default = ["webgpu"]
+# Exactly one backend per build; the page loads the right one (see index.html).
+webgpu = ["wgpu/webgpu"]
+webgl = ["wgpu/webgl"]
+
+[dependencies]
+fastmap-core.workspace = true
+fastmap-render.workspace = true
+wgpu = { workspace = true, features = ["wgsl", "std"] }
+wasm-bindgen = "0.2.130"
+wasm-bindgen-futures = "0.4"
+js-sys = "0.3"
+web-sys = { version = "0.3", features = [
+  "Window", "Document", "Element", "HtmlElement", "HtmlCanvasElement", "HtmlInputElement",
+  "HtmlSelectElement", "HtmlAnchorElement", "Event", "EventTarget", "PointerEvent", "WheelEvent",
+  "MouseEvent", "KeyboardEvent", "AddEventListenerOptions", "Location", "History", "UrlSearchParams",
+  "Performance", "DomTokenList", "Node",
+] }

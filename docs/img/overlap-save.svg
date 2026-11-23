@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360" font-family="system-ui, sans-serif" font-size="13">
+  <!-- SPDX-License-Identifier: CC-BY-SA-4.0 -->
+  <rect width="640" height="360" fill="#ffffff"/>
+  <!-- Window: 256 x 256 (scaled 1 px = 1.2 hex) -->
+  <rect x="30" y="20" width="307" height="307" fill="#dbe7f3" stroke="#3b6ea5" stroke-width="2"/>
+  <!-- Tile: 128 x 128, centered, margin 64 -->
+  <rect x="107" y="97" width="153" height="153" fill="#cfe5c8" stroke="#3f7d3b" stroke-width="2"/>
+  <!-- Apron: one hex ring (exaggerated) -->
+  <rect x="103" y="93" width="161" height="161" fill="none" stroke="#3f7d3b" stroke-width="1" stroke-dasharray="4 3"/>
+  <!-- Kernel reach from a corner output hex -->
+  <circle cx="107" cy="97" r="66" fill="#f2a65a33" stroke="#c46a1b" stroke-width="1.5"/>
+  <circle cx="107" cy="97" r="3" fill="#c46a1b"/>
+  <line x1="107" y1="97" x2="61" y2="50" stroke="#c46a1b" stroke-width="1.5"/>
+  <text x="66" y="80" fill="#9a4f10">R</text>
+  <!-- Labels -->
+  <text x="183" y="178" text-anchor="middle" fill="#2c5a29" font-weight="600">tile 128²</text>
+  <text x="183" y="196" text-anchor="middle" fill="#2c5a29">(kept, + 1-hex apron)</text>
+  <text x="183" y="315" text-anchor="middle" fill="#2b5582">FFT window 256² of noise</text>
+  <line x1="260" y1="270" x2="337" y2="270" stroke="#3b6ea5" stroke-width="1"/>
+  <text x="298" y="264" text-anchor="middle" fill="#2b5582">margin 64</text>
+  <!-- Explanation -->
+  <g fill="#222">
+    <text x="365" y="45" font-weight="600">Overlap-save, per tile</text>
+    <text x="365" y="75">1. Fill the window with noise(seed, q, r):</text>
+    <text x="383" y="93">the tile plus its neighbors' hexes.</text>
+    <text x="365" y="121">2. rFFT → × kernel spectrum → inverse.</text>
+    <text x="365" y="149">3. Circular wrap-around only corrupts</text>
+    <text x="383" y="167">hexes within reach R of the window edge.</text>
+    <text x="365" y="195">4. R ≤ (margin − 1)·√3/2, so the whole tile</text>
+    <text x="383" y="213">(and its apron) is exact.</text>
+    <text x="365" y="241">Every tile is complete on its own; tiles</text>
+    <text x="365" y="259">never need to be stitched or revisited.</text>
+  </g>
+</svg>
