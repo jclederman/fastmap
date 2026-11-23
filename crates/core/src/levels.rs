@@ -456,7 +456,7 @@ pub fn add_interpolated(
             }
         }
     }
-    for (row, o) in out.chunks_exact_mut(STORED).enumerate() {
+    for (row, o) in out.as_chunks_mut::<STORED>().0.iter_mut().enumerate() {
         let r = ra + row as i64;
         let rn = node(r);
         let wi = w[(r - rn * s as i64) as usize];
